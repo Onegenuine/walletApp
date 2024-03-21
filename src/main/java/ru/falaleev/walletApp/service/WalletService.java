@@ -1,14 +1,17 @@
 package ru.falaleev.walletApp.service;
 
-import jakarta.persistence.LockModeType;
 import jakarta.transaction.Transactional;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.data.jpa.repository.Lock;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
+import org.springframework.web.server.ResponseStatusException;
+import ru.falaleev.walletApp.dto.ErrorResponse;
 import ru.falaleev.walletApp.exception.InsufficientBalanceException;
 import ru.falaleev.walletApp.exception.WalletNotFoundException;
+import ru.falaleev.walletApp.model.OperationType;
 import ru.falaleev.walletApp.model.Wallet;
 import ru.falaleev.walletApp.repository.WalletRepository;
 
@@ -38,7 +41,6 @@ public class WalletService {
     }
 
     @Transactional
-    @Lock(LockModeType.PESSIMISTIC_WRITE)
     public Wallet deposit(Wallet wallet, BigDecimal amount) {
         logger.debug("Depositing {} to wallet with ID {}", amount, wallet.getId());
         wallet.setBalance(wallet.getBalance().add(amount));
@@ -46,7 +48,6 @@ public class WalletService {
     }
 
     @Transactional
-    @Lock(LockModeType.PESSIMISTIC_WRITE)
     public Wallet withdraw(Wallet wallet, BigDecimal amount) {
         logger.debug("Withdrawing {} from wallet with ID {}", amount, wallet.getId());
         if (wallet.getBalance().compareTo(amount) < 0) {
@@ -66,5 +67,33 @@ public class WalletService {
     public List<Wallet> getAllWallets() {
         logger.debug("Getting all wallets");
         return walletRepository.findAll();
+    }
+
+    @Transactional
+    public Wallet getWalletOrHandleNotFoundException(UUID walletId) {
+        try {
+            return  walletRepository.findByIdWithPessimisticWriteLock(walletId);
+        } catch (WalletNotFoundException e) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, e.getMessage());
+        }
+    }
+
+    @Transactional
+    public Wallet performOperation(Wallet wallet, OperationType operationType, BigDecimal amount) throws InsufficientBalanceException {
+        if (operationType == OperationType.DEPOSIT) {
+            return deposit(wallet, amount);
+        } else {
+            return withdraw(wallet, amount);
+        }
+    }
+
+    public ResponseEntity<?> handleBadRequest(String errorMessage) {
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                .body(new ErrorResponse(HttpStatus.BAD_REQUEST.value(), errorMessage));
+    }
+
+    public ResponseEntity<?> handleNotFoundException(WalletNotFoundException e) {
+        return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                .body(new ErrorResponse(HttpStatus.NOT_FOUND.value(), e.getMessage()));
     }
 }
