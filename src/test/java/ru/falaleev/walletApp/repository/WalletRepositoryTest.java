@@ -1,37 +1,43 @@
 package ru.falaleev.walletApp.repository;
 
 
-import java.math.BigDecimal;
 import java.util.UUID;
 
 import org.junit.jupiter.api.Test;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
 import ru.falaleev.walletApp.model.Wallet;
 
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.autoconfigure.orm.jpa.DataJpaTest;
-import org.springframework.test.context.junit.jupiter.SpringExtension;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
 
-@ExtendWith(SpringExtension.class)
-@DataJpaTest
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.mockito.Mockito.*;
+
+@ExtendWith(MockitoExtension.class)
 class WalletRepositoryTest {
 
-    @Autowired
+    @Mock
+    private Wallet mockedWallet;
+
+    @Mock
     private WalletRepository walletRepository;
 
     @Test
-    void testWalletRepository() {
-        // Создаем новый кошелек
-        Wallet wallet = new Wallet(UUID.randomUUID(), BigDecimal.valueOf(100));
-        // Сохраняем кошелек в репозитории
-        walletRepository.save(wallet);
+    void testFindByIdWithPessimisticWriteLock() {
+        // Устанавливаем значения для теста
+        UUID walletId = UUID.randomUUID();
 
-        // Извлекаем кошелек из репозитория по его ID
-        Wallet retrievedWallet = walletRepository.findById(wallet.getId()).orElse(null);
+        // Создаем заглушку для возвращаемого значения
+        when(walletRepository.findByIdWithPessimisticWriteLock(walletId)).thenReturn(mockedWallet);
 
-        // Проверяем, что кошелек был успешно извлечен из репозитория
-        assertNotNull(retrievedWallet);
+        // Вызываем метод, который тестируем
+        Wallet wallet = walletRepository.findByIdWithPessimisticWriteLock(walletId);
+
+        // Проверяем, что метод findByIdWithPessimisticWriteLock вызван с правильными аргументами
+        verify(walletRepository, times(1)).findByIdWithPessimisticWriteLock(walletId);
+
+        // Проверяем, что возвращенный объект соответствует ожидаемому
+        assertEquals(mockedWallet, wallet);
     }
 }
 

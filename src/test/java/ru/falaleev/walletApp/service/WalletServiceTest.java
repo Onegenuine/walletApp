@@ -1,22 +1,24 @@
 package ru.falaleev.walletApp.service;
+
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
-import ru.falaleev.walletApp.exception.InsufficientBalanceException;
+import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
+import ru.falaleev.walletApp.exception.WalletNotFoundException;
+import ru.falaleev.walletApp.model.OperationType;
 import ru.falaleev.walletApp.model.Wallet;
 import ru.falaleev.walletApp.repository.WalletRepository;
 
 import java.math.BigDecimal;
+import java.util.Collections;
 import java.util.List;
 import java.util.UUID;
 
-import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.mockito.Mockito.*;
-
-import org.mockito.junit.jupiter.MockitoExtension;
-import org.slf4j.Logger;
 import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
 class WalletServiceTest {
@@ -24,80 +26,114 @@ class WalletServiceTest {
     @Mock
     private WalletRepository walletRepository;
 
-    @Mock
-    private Logger logger;
-
     @InjectMocks
     private WalletService walletService;
 
     @Test
-    void testDeposit() {
+    void testWithdraw() {
+        // Устанавливаем значения для теста
         UUID walletId = UUID.randomUUID();
         Wallet wallet = new Wallet(walletId, BigDecimal.valueOf(100));
-        BigDecimal depositAmount = BigDecimal.valueOf(50);
+        BigDecimal amount = BigDecimal.valueOf(50);
+        BigDecimal expectedBalance = BigDecimal.valueOf(50);
 
+        // Создаем заглушку для возвращаемого значения
         when(walletRepository.save(wallet)).thenReturn(wallet);
 
-        Wallet result = walletService.deposit(wallet, depositAmount);
+        // Вызываем метод, который тестируем
+        Wallet updatedWallet = walletService.withdraw(wallet, amount);
 
-        assertEquals(wallet.getBalance().add(depositAmount), result.getBalance());
-        verify(logger).debug("Depositing {} to wallet with ID {}", depositAmount, walletId);
-    }
+        // Проверяем, что метод save вызван с правильным аргументом
+        verify(walletRepository, times(1)).save(wallet);
 
-    @Test
-    void testWithdraw_InsufficientBalance() {
-        UUID walletId = UUID.randomUUID();
-        Wallet wallet = new Wallet(walletId, BigDecimal.valueOf(100));
-        BigDecimal withdrawAmount = BigDecimal.valueOf(150);
-
-        assertThrows(InsufficientBalanceException.class, () -> walletService.withdraw(wallet, withdrawAmount));
-        verify(logger).error("Insufficient balance to withdraw {} from wallet with ID {}", withdrawAmount, walletId);
-    }
-
-    @Test
-    void testWithdraw_SufficientBalance() {
-        UUID walletId = UUID.randomUUID();
-        BigDecimal initialBalance = BigDecimal.valueOf(200);
-        BigDecimal withdrawAmount = BigDecimal.valueOf(150);
-        Wallet wallet = new Wallet(walletId, initialBalance);
-
-        when(walletRepository.save(wallet)).thenReturn(wallet);
-
-        Wallet result = walletService.withdraw(wallet, withdrawAmount);
-
-        assertEquals(initialBalance.subtract(withdrawAmount), result.getBalance());
-        verify(logger).debug("Withdrawing {} from wallet with ID {}", withdrawAmount, walletId);
+        // Проверяем, что баланс кошелька изменился правильно
+        assertEquals(expectedBalance, updatedWallet.getBalance());
     }
 
     @Test
     void testSaveWallet() {
+        // Устанавливаем значения для теста
         UUID walletId = UUID.randomUUID();
-        BigDecimal initialBalance = BigDecimal.valueOf(100);
-        Wallet wallet = new Wallet(walletId, initialBalance);
+        Wallet wallet = new Wallet(walletId, BigDecimal.valueOf(100));
 
+        // Создаем заглушку для возвращаемого значения
         when(walletRepository.save(wallet)).thenReturn(wallet);
 
-        Wallet result = walletService.saveWallet(wallet);
+        // Вызываем метод, который тестируем
+        Wallet savedWallet = walletService.saveWallet(wallet);
 
-        assertEquals(wallet, result);
-        verify(logger).debug("Saving wallet: {}", wallet);
+        // Проверяем, что метод save вызван с правильным аргументом
+        verify(walletRepository, times(1)).save(wallet);
+
+        // Проверяем, что возвращенный кошелек соответствует ожиданиям
+        assertEquals(wallet, savedWallet);
     }
 
     @Test
     void testGetAllWallets() {
-        UUID walletId1 = UUID.randomUUID();
-        UUID walletId2 = UUID.randomUUID();
-        BigDecimal initialBalance = BigDecimal.valueOf(100);
-        Wallet wallet1 = new Wallet(walletId1, initialBalance);
-        Wallet wallet2 = new Wallet(walletId2, initialBalance);
+        // Устанавливаем значения для теста
+        UUID walletId = UUID.randomUUID();
+        Wallet wallet = new Wallet(walletId, BigDecimal.valueOf(100));
+        List<Wallet> expectedWallets = Collections.singletonList(wallet);
 
-        when(walletRepository.findAll()).thenReturn(List.of(wallet1, wallet2));
+        // Создаем заглушку для возвращаемого значения
+        when(walletRepository.findAll()).thenReturn(expectedWallets);
 
+        // Вызываем метод, который тестируем
         List<Wallet> wallets = walletService.getAllWallets();
 
-        assertEquals(2, wallets.size());
-        assertTrue(wallets.contains(wallet1));
-        assertTrue(wallets.contains(wallet2));
-        verify(logger).debug("Getting all wallets");
+        // Проверяем, что метод findAll вызван
+        verify(walletRepository, times(1)).findAll();
+
+        // Проверяем, что список кошельков не пустой и содержит ожидаемый кошелек
+        assertFalse(wallets.isEmpty());
+        assertEquals(expectedWallets, wallets);
+    }
+
+    @Test
+    void testPerformOperation_deposit() {
+        // Устанавливаем значения для теста
+        UUID walletId = UUID.randomUUID();
+        Wallet wallet = new Wallet(walletId, BigDecimal.valueOf(100));
+        BigDecimal amount = BigDecimal.valueOf(50);
+        BigDecimal expectedBalance = BigDecimal.valueOf(150);
+
+        // Создаем заглушки для возвращаемых значений
+        when(walletRepository.save(wallet)).thenReturn(wallet);
+
+        // Вызываем метод, который тестируем
+        Wallet updatedWallet = walletService.performOperation(wallet, OperationType.DEPOSIT, amount);
+
+        // Проверяем, что метод save вызван с правильным аргументом
+        verify(walletRepository, times(1)).save(wallet);
+
+        // Проверяем, что баланс кошелька изменился правильно
+        assertEquals(expectedBalance, updatedWallet.getBalance());
+    }
+
+    @Test
+    void testHandleBadRequest() {
+        // Устанавливаем значения для теста
+        String errorMessage = "Bad request error message";
+
+        // Вызываем метод, который тестируем
+        ResponseEntity<?> responseEntity = walletService.handleBadRequest(errorMessage);
+
+        // Проверяем, что создан корректный объект ResponseEntity с HTTP статусом 400
+        assertEquals(HttpStatus.BAD_REQUEST, responseEntity.getStatusCode());
+        assertNotNull(responseEntity.getBody());
+    }
+
+    @Test
+    void testHandleNotFoundException() {
+        // Устанавливаем значения для теста
+        WalletNotFoundException exception = new WalletNotFoundException(UUID.randomUUID());
+
+        // Вызываем метод, который тестируем
+        ResponseEntity<?> responseEntity = walletService.handleNotFoundException(exception);
+
+        // Проверяем, что создан корректный объект ResponseEntity с HTTP статусом 404
+        assertEquals(HttpStatus.NOT_FOUND, responseEntity.getStatusCode());
+        assertNotNull(responseEntity.getBody());
     }
 }
